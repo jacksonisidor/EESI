@@ -1,0 +1,10 @@
+# App-specific ignore patterns for Electron and build output
+node_modules/
+dist/
+.env.local
+.env.*.local
+*.log
+.DS_Store
+*.tsbuildinfo
+out/
+release/

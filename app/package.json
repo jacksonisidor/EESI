@@ -1,0 +1,51 @@
+{
+  "_comment": "GEN Investigator Electron app package metadata.",
+  "name": "gen-investigator",
+  "version": "1.0.0",
+  "description": "GEN Investigator - Object Detection and Matching Interface",
+  "main": "dist/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:electron && npm run build:vite && npm run make",
+    "build:electron": "node build-electron.mjs",
+    "build:vite": "vite build",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron-dev": "npm run build:electron && concurrently \"vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
+    "make": "electron-builder"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "lucide-react": "^0.487.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.12",
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^8.2.2",
+    "esbuild": "^0.21.5",
+    "electron": "^31.1.0",
+    "electron-builder": "^25.1.1",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.4.5",
+    "vite": "^6.3.5",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.gen.investigator",
+    "productName": "GEN Investigator",
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
+  }
+}
