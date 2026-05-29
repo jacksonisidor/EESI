@@ -1,7 +1,5 @@
 # EESI — Everything Everywhere Search Index
 
-**Client deliverable for the [Global Emancipation Network (GEN)](https://www.globalemancipation.ngo/).**
-
 EESI is a computer-vision system that helps investigators compare visually distinctive bathroom fixtures and fittings against a large, geotagged reference index. Investigators upload evidence images on a **local device**; the system extracts **embeddings** (mathematical fingerprints that cannot be reconstructed into the original image) and queries a remote reference database for visually similar objects with known geographic metadata.
 
 This repository contains:
