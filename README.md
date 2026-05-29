@@ -95,8 +95,7 @@ Skips steps 1–3. Embeds the crop and queries the database for that label only 
 EESI/
 ├── README.md                 # This file
 ├── .env.example              # Copy to .env — DB and AWS settings
-├── requirements.txt          # Full Python lockfile (includes scraping/notebook deps)
-├── requirements-core.txt     # Minimal deps for query pipeline + app
+├── requirements.txt          # Dependencies for query pipeline and app
 ├── examples/
 │   └── query_example.py      # CLI example for both query paths
 ├── pipeline/                 # Python ML + database package
@@ -205,7 +204,7 @@ ssh -f -L 15432:localhost:5432 <username>@<ec2-host> -N
 1. SSH tunnel running (or background `-f` tunnel)
 2. `.env` filled in with DB credentials (from GEN)
 3. AWS SSO session active for S3 (see below)
-4. Python venv active with `requirements-core.txt` installed
+4. Python venv active with `requirements.txt` installed
 
 #### AWS SSO — S3 access (local or EC2)
 
@@ -291,10 +290,8 @@ From the repository root:
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install --upgrade pip
-pip install -r requirements-core.txt
+pip install -r requirements.txt
 ```
-
-Use `requirements.txt` instead if you need the full development/scraping stack.
 
 ### 4.5 Environment file
 
@@ -523,50 +520,13 @@ Copy `.env.example` → `.env` at the **repository root**.
 
 Standard AWS variables (`AWS_ACCESS_KEY_ID`, etc.) apply if not using SSO profiles.
 
----
-
-## 10. Notes for GEN
-
-### What was fixed for handoff
-
-- Removed **hardcoded developer paths** in `app/electron-main.ts` (previously pointed at a specific machine).
-- Database and S3 settings now load from **`.env`** instead of literals in `pipeline/db.py`.
-- `ingest.py` inserts use **`base_clip_embedding`** to match the production schema.
-- Added **`requirements-core.txt`**, **`.env.example`**, and **`examples/query_example.py`**.
-
-### Limitations and known gaps
-
-| Item | Status |
-|------|--------|
-| **Map UI** | Not implemented in the current Electron UI; matches show location text only. |
-| **Scraping / ingestion automation** | Not included in this repo; reference DB was populated separately. |
-| **Room types beyond bathroom** | CLIP filter is bathroom-only; architecture supports future room pipelines. |
-| **GeoLoRA** | Checkpoints included; underperformed base CLIP after limited training — further tuning recommended. |
-| **Challenging YOLO classes** | `plant`, `brand` have lower mAP; often undetected rather than misclassified. |
-| **Large `requirements.txt`** | Contains Jupyter, Selenium, scraping deps; use `requirements-core.txt` for investigators. |
-| **Model file size** | `.pt` weights are large; ensure Git LFS or separate distribution if not in clone. |
-
-### Recommended next steps
-
-1. Confirm EC2 security groups allow investigator access (VPN/SSH tunnel + S3 IAM).  
-2. Rotate database password from development default and store in secrets manager.  
-3. Continue GeoLoRA training with larger batch size and more epochs if geographic precision must improve beyond country level.  
-4. Add map visualization (e.g. Mapbox/Leaflet) using `lat`/`long` from match payloads.  
-5. Expand room-type filters and YOLO ontology for bedrooms, kitchens, etc.  
-6. Audit reference DB for mislabeled scraper rows.  
-
-### Security reminder
-
-Configure investigator machines so **CSAM never uploads to the server**—only embeddings and non-sensitive query metadata. Reference images returned from S3 are from the public geotagged corpus only.
-
----
 
 ## 11. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|----------------|-----|
 | `Electron bridge unavailable` | Opened Vite URL in browser | Use the **Electron** window (`npm run electron-dev`) |
-| `Python script failed` / import errors | Wrong Python or missing deps | Set `PYTHON_EXECUTABLE` to venv python; `pip install -r requirements-core.txt` |
+| `Python script failed` / import errors | Wrong Python or missing deps | Set `PYTHON_EXECUTABLE` to venv python; `pip install -r requirements.txt` |
 | DB connection refused | No SSH tunnel (local) or wrong `.env` | Start tunnel: `ssh -L 5432:localhost:5432 <username>@<ec2-host> -N`; see [§4.2](#42-local-development-machine-vs-ec2-instance) |
 | S3 / `image_retrieval_error` in matches | SSO session expired | Re-run `aws sso login --profile <aws-profile>` and verify with `aws s3 ls` |
 | `cd: no such file or directory: app` | Already inside `app/` | Run `npm run electron-dev` only (no extra `cd app`) |
@@ -578,7 +538,3 @@ Configure investigator machines so **CSAM never uploads to the server**—only e
 For app-specific details, see [`app/README.md`](app/README.md) and [`app/QUICKSTART.md`](app/QUICKSTART.md).
 
 ---
-
-## License / contact
-
-Developed by the Cal Poly Data Science cohort in partnership with GEN. For operational support, contact your GEN technical lead with this repository and your `.env` configuration (never commit secrets).
