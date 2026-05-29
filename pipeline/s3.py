@@ -2,11 +2,17 @@
 
 import boto3
 import io
-from urllib.parse import urlparse
-from PIL import Image
 import os
+from pathlib import Path
+from urllib.parse import urlparse
 
-BUCKET = "eesi-students-368003222772"
+from dotenv import load_dotenv
+from PIL import Image
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_REPO_ROOT / ".env")
+
+BUCKET = os.getenv("EESI_S3_BUCKET", "eesi-students-368003222772")
 
 _s3_client = None
 

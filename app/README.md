@@ -53,7 +53,7 @@ electron app/
 ### Setup
 
 ```bash
-cd "electron app"
+cd app
 npm install
 ```
 

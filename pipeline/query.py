@@ -5,12 +5,30 @@ This module uses the shared steps in core.py, then continues
 the additional steps for returning matches to the investigator
 '''
 
-from .core import process_image, process_crop
-from .db import get_connection 
-from .s3 import retrieve_image
-import numpy as np 
 import io
 import base64
+import os
+
+from .core import process_image, process_crop
+from .db import get_connection
+from .s3 import retrieve_image
+
+# Production default per evaluation: base DFN-CLIP (1024-dim, L2-normalized)
+_ALLOWED_EMBEDDING_COLUMNS = frozenset({
+    "base_clip_embedding",
+    "flora_embedding",
+    "dino_embedding",
+    "geolora_embedding_e1",
+    "geolora_embedding_e2",
+    "geolora_embedding_e3",
+    "geolora_embedding_e4",
+})
+EMBEDDING_COLUMN = os.getenv("EESI_EMBEDDING_COLUMN", "base_clip_embedding")
+if EMBEDDING_COLUMN not in _ALLOWED_EMBEDDING_COLUMNS:
+    raise ValueError(
+        f"Invalid EESI_EMBEDDING_COLUMN={EMBEDDING_COLUMN!r}. "
+        f"Choose one of: {sorted(_ALLOWED_EMBEDDING_COLUMNS)}"
+    )
 
 # if there are duplicate images in the reference DB, we don't want to return both
 def deduplicate_results(results, threshold=0.001):
@@ -33,16 +51,17 @@ def query_db(embedding, label, k):
     cur = conn.cursor()
 
     # query top k matches for this object
-    ## <=> means cosine distance
+    # <=> is pgvector cosine distance
     cur.execute(
-        """ 
+        f"""
         SELECT label, image_path, city, state, country, continent,
-            lat, long, base_clip_embedding <=> %s::vector AS distance
-        FROM objects 
+            lat, long, {EMBEDDING_COLUMN} <=> %s::vector AS distance
+        FROM objects
         WHERE label = %s
         ORDER BY distance
         LIMIT %s
-        """, (embedding.tolist(), label, fetch_k)
+        """,
+        (embedding.tolist(), label, fetch_k),
     )
 
     rows = cur.fetchall()

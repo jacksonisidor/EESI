@@ -12,6 +12,13 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Repository root (parent of `app/`). Works on any machine after clone. */
+const repoRoot = path.resolve(__dirname, '..', '..');
+
+const devServerPort = process.env.VITE_DEV_SERVER_PORT || '5173';
+const devServerUrl =
+  process.env.VITE_DEV_SERVER_URL || `http://localhost:${devServerPort}`;
+
 const isDev = process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_HOST;
 
 let mainWindow: BrowserWindow | null = null;
@@ -33,7 +40,9 @@ const createWindow = () => {
     },
   });
 
-  const startUrl = isDev ? 'http://localhost:5173' : `file://${path.join(__dirname, '../renderer/index.html')}`;
+  const startUrl = isDev
+    ? devServerUrl
+    : `file://${path.join(__dirname, '../renderer/index.html')}`;
   mainWindow.loadURL(startUrl);
 
   if (isDev) {
@@ -62,27 +71,23 @@ app.on('activate', () => {
 // Function to call the Python GEN pipeline query function
 async function callPythonQuery(imagePath: string, mode: 'image' | 'crop', label?: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    // Path to the Python script
-    const pythonScript = path.join(__dirname, '..', '..', 'pipeline', 'query.py');
-
-    // Create a temporary Python script to call the function
+    // Create a temporary Python script to call the pipeline
     const tempScript = `
 import sys
 import os
 import json
 import traceback
 
-# Hardcode the GEN project path for now
-project_root = '/Users/tsprouse/Documents/GitHub/GEN'
-pipeline_dir = os.path.join(project_root, 'pipeline')
-
-print("Using hardcoded project root:", project_root, file=sys.stderr)
-
-# Add paths to sys.path
+project_root = os.environ.get("EESI_ROOT", ${JSON.stringify(repoRoot)})
 sys.path.insert(0, project_root)
-sys.path.insert(0, pipeline_dir)
 
-print("Updated Python path includes pipeline:", pipeline_dir in sys.path, file=sys.stderr)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(project_root, ".env"))
+except ImportError:
+    pass
+
+print("EESI project root:", project_root, file=sys.stderr)
 
 try:
     from pipeline.query import query_from_image, query_from_crop
@@ -169,8 +174,13 @@ except Exception as e:
 
     // Run Python script
     const python = spawn(pythonExecutable, [tempScriptPath], {
-      cwd: path.join(__dirname, '..', '..'),  // Set working directory to GEN project root
-      stdio: ['pipe', 'pipe', 'pipe']
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        EESI_ROOT: repoRoot,
+        PYTHONPATH: repoRoot,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     let output = '';

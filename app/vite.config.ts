@@ -20,7 +20,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: Number(process.env.VITE_DEV_SERVER_PORT) || 5173,
+    strictPort: true,
   },
   resolve: {
     alias: {

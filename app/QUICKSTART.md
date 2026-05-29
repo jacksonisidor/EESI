@@ -6,7 +6,7 @@ Your fully functional Electron app is ready! Here's how to run it:
 ## Quick Start (30 seconds)
 
 ```bash
-cd "electron app"
+cd app
 npm run electron-dev
 ```
 
@@ -38,7 +38,7 @@ That's it! The app will:
 ## Project Layout
 
 ```
-electron app/
+app/
 ├── src/                          # React application
 │   ├── App.tsx                   # Main UI component  
 │   ├── main.tsx                  # React entry point
