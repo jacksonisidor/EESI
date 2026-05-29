@@ -23,8 +23,7 @@ This repository contains:
 7. [Database schema](#7-database-schema)
 8. [Models](#8-models)
 9. [Configuration](#9-configuration)
-10. [Notes for GEN](#10-notes-for-gen)
-11. [Troubleshooting](#11-troubleshooting)
+10. [Troubleshooting](#11-troubleshooting)
 
 ---
 
