@@ -18,7 +18,7 @@ def get_connection():
         port=int(os.getenv("EESI_DB_PORT", "5432")),
         dbname=os.getenv("EESI_DB_NAME", "eesi"),
         user=os.getenv("EESI_DB_USER", "eesi"),
-        password=os.getenv("EESI_DB_PASSWORD", ""),
+        password=os.getenv("EESI_DB_PASSWORD", "eesi1234"),
     )
     register_vector(conn)
     return conn

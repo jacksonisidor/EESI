@@ -233,6 +233,15 @@ sudo -u postgres psql -d eesi
 
 Use this for SQL inspection, row counts, and debugging — not required for the Electron app if you tunnel from your laptop.
 
+**Note — two different ways to connect:**
+
+| Method | Auth | Password? |
+|--------|------|-----------|
+| `sudo -u postgres psql -d eesi` on EC2 | OS peer auth (superuser) | No |
+| App / `pipeline/` over TCP (`localhost:5432`) | Role `eesi` + password | Yes — set `EESI_DB_PASSWORD` in `.env` (default dev value: `eesi1234`) |
+
+If the app reports “password authentication failed for user eesi”, check that `.env` has the correct password and that your SSH tunnel is running (otherwise you may be hitting a different Postgres on your laptop).
+
 #### Shutting down the EC2 instance
 
 **Only when GEN approves** (stops GPU/DB host for everyone):
@@ -505,7 +514,7 @@ Copy `.env.example` → `.env` at the **repository root**.
 | `EESI_DB_PORT` | `5432` | PostgreSQL port |
 | `EESI_DB_NAME` | `eesi` | Database name |
 | `EESI_DB_USER` | `eesi` | Database user |
-| `EESI_DB_PASSWORD` | *(empty)* | Database password |
+| `EESI_DB_PASSWORD` | `eesi1234` | Password for role `eesi` (TCP); not used for `sudo -u postgres psql` |
 | `EESI_S3_BUCKET` | `eesi-students-368003222772` | Reference image bucket |
 | `EESI_EMBEDDING_COLUMN` | `base_clip_embedding` | pgvector column for search |
 | `PYTHON_EXECUTABLE` | `python3` | Python for Electron subprocess |
