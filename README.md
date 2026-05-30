@@ -150,7 +150,7 @@ Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection de
 
 #### SSH into the EC2 instance
 
-When you need a shell on the database/GPU host:
+**ONLY IF RUNNING CODE ON EC2** -- the app does not require this.
 
 ```bash
 ssh <username>@<ec2-host>
@@ -158,7 +158,7 @@ ssh <username>@<ec2-host>
 
 #### SSH tunnel — local machine → database on EC2
 
-**When required:** Any time you run the Electron app, `query_example.py`, or other pipeline code on your **local machine** while the database lives on EC2.
+**When required:** Any time you run the Electron app or other pipeline code on your **local machine** while the database lives on EC2. Not required when running code within EC2.
 
 Run this on your **local** terminal (leave it open while using the app or local Python scripts):
 
