@@ -140,20 +140,13 @@ EESI/
 
 ### 4.2 Local development machine vs EC2 instance
 
-The reference **PostgreSQL database runs on GEN’s EC2 instance** (g4dn.xlarge). **S3** holds reference images. How you connect depends on **where you run the code**:
+The reference **PostgreSQL database runs on GEN’s EC2 instance** (g4dn.xlarge). **S3** holds reference images.
 
-| | **Local machine** (Mac/laptop) | **On the EC2 instance** (SSH session) |
-|---|-------------------------------|--------------------------------------|
-| **Typical use** | Investigator **Electron app**, local embedding + remote DB query | DB admin, Python scripts, GPU-heavy batch jobs, `psql` |
-| **PostgreSQL** | **SSH tunnel required** — DB is not public on the internet | Connect to `localhost:5432` directly (no tunnel) |
-| **S3** | `aws sso login --profile <aws-profile>` on your laptop | Same SSO login on EC2 (if configured) or instance IAM role |
-| **Electron UI** | ✅ Supported (recommended) | ❌ Not practical (no desktop display); use local machine instead |
-
-> **Important:** If you are on your **own laptop** (not logged into the EC2 VM), you **must** open an SSH tunnel before the app or `query_example.py` can reach the database. Without it, you will see connection refused errors on port 5432.
+> **Important:** If you are on your **own laptop** (not logged into the EC2 VM), you **must** open an SSH tunnel before the app to reach the database. Without it, you will see connection refused errors on port 5432. You will also need AWS access to retrieve images from S3.
 
 #### AWS access (SSO)
 
-Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection details** (host, SSH user, DB credentials) from your GEN administrator or internal runbook. Do not commit these values to the repository.
+Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection details** (host, SSH user, DB credentials) from your GEN administrator.
 
 #### SSH into the EC2 instance
 
