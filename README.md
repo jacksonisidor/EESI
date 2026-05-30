@@ -62,7 +62,7 @@ EESI builds on ideas from GEN’s **Uniform Intelligence Hub (UIH)**, which matc
 1. **CLIP filter** (`clip_filter.py`) — zero-shot check that the scene is a bathroom  
 2. **YOLO detector** (`yolo_detector.py`) — 13 object classes, bounding boxes  
 3. **Cropper** (`cropper.py`) — isolate each detection  
-4. **Embedder** (`embedder.py`) — **base DFN-CLIP ViT-H/14-378** (production default)  
+4. **Embedder** (`embedder.py`) — **base DFN-CLIP ViT-H/14-378** embeds each cropped object 
 5. **Query** (`query.py`) — top-K cosine matches per detected label from PostgreSQL  
 6. **S3** (`s3.py`) — fetch match images for display  
 
@@ -140,24 +140,17 @@ EESI/
 
 ### 4.2 Local development machine vs EC2 instance
 
-The reference **PostgreSQL database runs on GEN’s EC2 instance** (g4dn.xlarge). **S3** holds reference images. How you connect depends on **where you run the code**:
+The reference **PostgreSQL database runs on GEN’s EC2 instance** (g4dn.xlarge). **S3** holds reference images.
 
-| | **Local machine** (Mac/laptop) | **On the EC2 instance** (SSH session) |
-|---|-------------------------------|--------------------------------------|
-| **Typical use** | Investigator **Electron app**, local embedding + remote DB query | DB admin, Python scripts, GPU-heavy batch jobs, `psql` |
-| **PostgreSQL** | **SSH tunnel required** — DB is not public on the internet | Connect to `localhost:5432` directly (no tunnel) |
-| **S3** | `aws sso login --profile <aws-profile>` on your laptop | Same SSO login on EC2 (if configured) or instance IAM role |
-| **Electron UI** | ✅ Supported (recommended) | ❌ Not practical (no desktop display); use local machine instead |
-
-> **Important:** If you are on your **own laptop** (not logged into the EC2 VM), you **must** open an SSH tunnel before the app or `query_example.py` can reach the database. Without it, you will see connection refused errors on port 5432.
+> **Important:** If you are on your **own laptop** (not logged into the EC2 VM), you **must** open an SSH tunnel before the app to reach the database. Without it, you will see connection refused errors on port 5432. You will also need AWS access to retrieve images from S3.
 
 #### AWS access (SSO)
 
-Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection details** (host, SSH user, DB credentials) from your GEN administrator or internal runbook. Do not commit these values to the repository.
+Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection details** (host, SSH user, DB credentials) from your GEN administrator.
 
 #### SSH into the EC2 instance
 
-When you need a shell on the database/GPU host:
+*ONLY IF RUNNING CODE ON EC2* -- the app does not require this.
 
 ```bash
 ssh <username>@<ec2-host>
@@ -165,7 +158,7 @@ ssh <username>@<ec2-host>
 
 #### SSH tunnel — local machine → database on EC2
 
-**When required:** Any time you run the Electron app, `query_example.py`, or other pipeline code on your **local machine** while the database lives on EC2.
+**When required:** Any time you run the Electron app or other pipeline code on your **local machine** while the database lives on EC2. Not required when running code within EC2.
 
 Run this on your **local** terminal (leave it open while using the app or local Python scripts):
 
