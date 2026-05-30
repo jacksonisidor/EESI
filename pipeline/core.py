@@ -12,7 +12,7 @@ from .clip_filter import is_bathroom
 from .yolo_detector import detect_objects
 from .cropper import crop_detections
 # from .captioner import generate_captions
-from .embedder import generate_dino_embedding, generate_flora_embedding, generate_base_clip_embedding
+from .embedder import generate_dino_embedding, generate_flora_embedding, generate_base_clip_embedding, generate_geolora3_embedding
 from PIL import Image
 
 
