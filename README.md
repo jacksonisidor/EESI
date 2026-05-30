@@ -62,7 +62,7 @@ EESI builds on ideas from GEN’s **Uniform Intelligence Hub (UIH)**, which matc
 1. **CLIP filter** (`clip_filter.py`) — zero-shot check that the scene is a bathroom  
 2. **YOLO detector** (`yolo_detector.py`) — 13 object classes, bounding boxes  
 3. **Cropper** (`cropper.py`) — isolate each detection  
-4. **Embedder** (`embedder.py`) — **base DFN-CLIP ViT-H/14-378** (production default)  
+4. **Embedder** (`embedder.py`) — **base DFN-CLIP ViT-H/14-378** embeds each cropped object 
 5. **Query** (`query.py`) — top-K cosine matches per detected label from PostgreSQL  
 6. **S3** (`s3.py`) — fetch match images for display  
 
