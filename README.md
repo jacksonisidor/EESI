@@ -1,539 +1,249 @@
 # EESI — Everything Everywhere Search Index
 
-EESI is a computer-vision system that helps investigators compare visually distinctive bathroom fixtures and fittings against a large, geotagged reference index. Investigators upload evidence images on a **local device**; the system extracts **embeddings** (mathematical fingerprints that cannot be reconstructed into the original image) and queries a remote reference database for visually similar objects with known geographic metadata.
+EESI helps investigators compare visually distinctive bathroom fixtures against a large, geotagged reference index. Investigators run the **desktop app on their local machine**. The app detects objects, generates embeddings locally, and queries a remote reference database for similar objects with geographic metadata.
 
-This repository contains:
+**Privacy:** Evidence images stay on the investigator device. Only embeddings are sent to the database for similarity search. Match thumbnails are reference photos fetched from S3.
 
-- The **query pipeline** (`pipeline/`) — detection, embedding, and similarity search
-- The **investigator desktop app** (`app/`) — Electron + React UI
-- **Model weights** (`models/`) — YOLO detector and optional LoRA checkpoints
-- Configuration templates (`.env.example`) for database and AWS access
+**Reference scale:** 273,000+ cropped objects across 236+ countries (PostgreSQL + pgvector on GEN EC2, images on S3).
 
 ---
 
 ## Table of contents
 
-1. [Project overview](#1-project-overview)
-2. [System architecture](#2-system-architecture)
-3. [Repository structure](#3-repository-structure)
-4. [Setup](#4-setup)
-   - [Local machine vs EC2](#42-local-development-machine-vs-ec2-instance)
-5. [Running the investigator app](#5-running-the-investigator-app) ← **start here for the UI**
-6. [Programmatic usage](#6-programmatic-usage)
-7. [Database schema](#7-database-schema)
-8. [Models](#8-models)
-9. [Configuration](#9-configuration)
-10. [Troubleshooting](#11-troubleshooting)
+1. [Project overview](#project-overview)
+2. [System architecture](#system-architecture)
+3. [Repository structure](#repository-structure)
+4. [Setup (one-time)](#setup-one-time)
+5. [Run the app](#run-the-app)
+6. [Using the app](#using-the-app)
+7. [Database schema](#database-schema)
+8. [Models](#models)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 1. Project overview
+## Project overview
 
-Law-enforcement investigations often include large volumes of visual evidence. In bathroom scenes, regionally distinctive fixtures (toilets, sinks, outlets, shower enclosures, etc.) can narrow geographic hypotheses when compared against a global reference set.
+EESI builds on GEN’s **Uniform Intelligence Hub (UIH)** (school-uniform logo matching). It extends that idea to **everyday bathroom objects** — toilets, sinks, outlets, shower enclosures, etc. — indexed from publicly available geotagged photos.
 
-EESI builds on ideas from GEN’s **Uniform Intelligence Hub (UIH)**, which matches school-uniform logos. EESI generalizes that approach to **everyday bathroom objects** indexed from publicly available, geotagged listing photos (not CSAM).
-
-**Privacy architecture:** Raw CSAM must not leave the investigator machine. The Electron app runs detection and embedding **locally**; only embeddings and query parameters are sent to the database layer for similarity search. Match **thumbnail images** are fetched from S3 by the pipeline when displaying results (reference photos only).
-
-**Reference scale (as of project handoff):** 273,000+ cropped objects across 236+ countries, stored in PostgreSQL with pgvector and AWS S3.
+Investigators upload a bathroom image or a pre-cropped object. The system returns visually similar reference objects with city, country, coordinates, and similarity scores to help narrow geographic hypotheses.
 
 ---
 
-## 2. System architecture
+## System architecture
+
+**What runs where:**
+
+| Where | What |
+|-------|------|
+| **Your laptop (this repo)** | Electron app + Python pipeline — detection, embedding, UI |
+| **GEN EC2** | PostgreSQL database (embeddings + metadata) |
+| **AWS S3** | Reference crop images |
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Investigator device (Electron app + Python pipeline)            │
-│  • Upload full image OR pre-cropped object                       │
-│  • CLIP bathroom filter → YOLO detect → crop → embed (local)   │
-│  • Only embeddings + labels leave for DB query (privacy model)   │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ cosine similarity query
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  EESI server infrastructure (GEN EC2 + AWS)                      │
-│  • PostgreSQL + pgvector (embeddings + metadata)                 │
-│  • S3 bucket (reference crop images)                             │
-└─────────────────────────────────────────────────────────────────┘
+Your laptop                         GEN infrastructure
+┌─────────────────────────┐         ┌─────────────────────────┐
+│  Electron app (app/)    │         │  PostgreSQL + pgvector  │
+│  Python pipeline        │ ─query─▶│  (on EC2)               │
+│  (local ML inference)   │         │                         │
+│                         │ ◀─S3─── │  Reference images (S3)  │
+└─────────────────────────┘         └─────────────────────────┘
+         ▲
+         │ SSH tunnel (local only) forwards localhost:5432 → EC2 Postgres
 ```
 
-### Query path 1 — Full bathroom image
+**Query path 1 — Full image:** CLIP bathroom filter → YOLO detect → crop → embed → query DB → fetch match images from S3.
 
-1. **CLIP filter** (`clip_filter.py`) — zero-shot check that the scene is a bathroom  
-2. **YOLO detector** (`yolo_detector.py`) — 13 object classes, bounding boxes  
-3. **Cropper** (`cropper.py`) — isolate each detection  
-4. **Embedder** (`embedder.py`) — **base DFN-CLIP ViT-H/14-378** embeds each cropped object 
-5. **Query** (`query.py`) — top-K cosine matches per detected label from PostgreSQL  
-6. **S3** (`s3.py`) — fetch match images for display  
-
-### Query path 2 — Pre-cropped object with known label
-
-Skips steps 1–3. Embeds the crop and queries the database for that label only (`query_from_crop`).
-
-### Ingestion path (reference DB population)
-
-`ingest.py` runs the same core steps as path 1, then uploads crops to S3 and inserts rows into PostgreSQL. Used when building the reference index (scraping workflow), not during investigator queries.
-
-### Output fields (per match)
-
-| Field | Description |
-|--------|-------------|
-| `label` | Object class (e.g. `toilet`, `sink`) |
-| `city`, `state`, `country`, `continent` | Geographic metadata |
-| `lat`, `long` | Coordinates |
-| `image_path` | `s3://…` URI in the reference bucket |
-| `distance` | pgvector cosine distance (lower = more similar) |
+**Query path 2 — Pre-cropped object:** skip filter/detector → embed → query DB for the selected label.
 
 ---
 
-## 3. Repository structure
+## Repository structure
 
 ```
 EESI/
-├── README.md                 # This file
-├── .env.example              # Copy to .env — DB and AWS settings
-├── requirements.txt          # Dependencies for query pipeline and app
-├── examples/
-│   └── query_example.py      # CLI example for both query paths
-├── pipeline/                 # Python ML + database package
-│   ├── core.py               # Shared: filter → detect → crop → embed
-│   ├── clip_filter.py        # Bathroom vs non-bathroom (CLIP zero-shot)
-│   ├── yolo_detector.py      # Custom YOLO26s detector
-│   ├── cropper.py            # Bounding-box crops
-│   ├── embedder.py           # DFN-CLIP, Flora, GeoLoRA, DINOv2 options
-│   ├── flora_loader.py       # Flora LoRA checkpoint loader
-│   ├── geolora_loader.py     # GeoLoRA checkpoint loader
-│   ├── query.py              # Investigator query + deduplication
-│   ├── db.py                 # PostgreSQL connection + insert
-│   ├── s3.py                 # S3 upload/download
-│   └── ingest.py             # Reference ingestion (S3 + DB)
-├── models/                   # Trained weights (required for full pipeline)
-│   ├── object_detector_best.pt   # Fine-tuned YOLO (13 classes)
-│   ├── weights-41.pt             # Flora LoRA checkpoint (optional)
-│   ├── yolo26s.pt                # Base YOLO weights (training artifact)
-│   └── geolora_checkpoints/    # GeoLoRA epochs 1–4 (optional)
-└── app/                      # GEN Investigator Electron desktop app
-    ├── electron-main.ts      # Main process; spawns Python pipeline
-    ├── electron-preload.ts   # Secure IPC bridge
-    ├── src/App.tsx           # React UI
-    ├── package.json
-    ├── start-dev.sh          # One-command dev launcher
-    ├── README.md             # App-specific developer notes
-    └── QUICKSTART.md         # Short app quick reference
+├── .env.example          # Copy to .env
+├── requirements.txt      # Python dependencies
+├── pipeline/             # ML + database query code
+├── models/               # YOLO weights (object_detector_best.pt required)
+├── app/                  # Electron desktop app — this is what you run
+└── examples/             # Optional CLI scripts (not needed for normal use)
 ```
 
-**Not in this repo:** scraping scripts, EC2 provisioning, and the populated production database (hosted on GEN infrastructure).
+Key `pipeline/` modules: `core.py` (orchestration), `query.py` (search), `db.py`, `s3.py`, `yolo_detector.py`, `embedder.py`.
 
 ---
 
-## 4. Setup
+## Setup (one-time)
 
-### 4.1 Prerequisites
-
-| Component | Version / notes |
-|-----------|-----------------|
-| **Python** | 3.11+ recommended |
-| **Node.js** | 18+ (for Electron app) |
-| **PostgreSQL** | With **pgvector** extension; reference DB on GEN EC2 |
-| **AWS** | Credentials with read access to the EESI S3 bucket |
-| **GPU** | Optional; CUDA or Apple MPS speeds up embedding and YOLO |
-
-### 4.2 Local development machine vs EC2 instance
-
-The reference **PostgreSQL database runs on GEN’s EC2 instance** (g4dn.xlarge). **S3** holds reference images.
-
-> **Important:** If you are on your **own laptop** (not logged into the EC2 VM), you **must** open an SSH tunnel before the app to reach the database. Without it, you will see connection refused errors on port 5432. You will also need AWS access to retrieve images from S3.
-
-#### AWS access (SSO)
-
-Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection details** (host, SSH user, DB credentials) from your GEN administrator.
-
-#### SSH into the EC2 instance
-
-*ONLY IF RUNNING CODE ON EC2* -- the app does not require this.
-
-```bash
-ssh <username>@<ec2-host>
-```
-
-#### SSH tunnel — local machine → database on EC2
-
-**When required:** Any time you run the Electron app or other pipeline code on your **local machine** while the database lives on EC2. Not required when running code within EC2.
-
-Run this on your **local** terminal (leave it open while using the app or local Python scripts):
-
-```bash
-ssh -L 5432:localhost:5432 <username>@<ec2-host> -N
-```
-
-- `-L 5432:localhost:5432` forwards your laptop’s port 5432 to PostgreSQL on the EC2 instance.
-- `-N` means “no remote shell” (tunnel only).
-
-**Run in the background** (so you can use the same terminal for other work):
-
-```bash
-ssh -f -L 5432:localhost:5432 <username>@<ec2-host> -N
-```
-
-Then in `.env` at the repo root:
-
-```bash
-EESI_DB_HOST=localhost
-EESI_DB_PORT=5432
-```
-
-If local port 5432 is already in use (e.g. local Postgres), pick another local port:
-
-```bash
-ssh -f -L 15432:localhost:5432 <username>@<ec2-host> -N
-# .env: EESI_DB_PORT=15432
-```
-
-**Checklist before `npm run electron-dev` on a local machine:**
-
-1. SSH tunnel running (or background `-f` tunnel)
-2. `.env` filled in with DB credentials (from GEN)
-3. AWS SSO session active for S3 (see below)
-4. Python venv active with `requirements.txt` installed
-
-#### AWS SSO — S3 access (local or EC2)
-
-Reference images are stored in S3. After your team configures the AWS CLI with SSO:
-
-```bash
-aws sso login --profile <aws-profile>
-```
-
-Verify access (bucket name from GEN):
-
-```bash
-aws s3 ls s3://<bucket-name> --profile <aws-profile>
-```
-
-For `boto3` in the pipeline to use this profile, export before launching the app:
-
-```bash
-export AWS_PROFILE=<aws-profile>
-```
-
-#### On EC2 — direct database access
-
-After SSH into the instance (normal shell, not the tunnel-only `-N` session):
-
-```bash
-sudo -u postgres psql -d eesi
-```
-
-Use this for SQL inspection, row counts, and debugging — not required for the Electron app if you tunnel from your laptop.
-
-**Note — two different ways to connect:**
-
-| Method | Auth | Password? |
-|--------|------|-----------|
-| `sudo -u postgres psql -d eesi` on EC2 | OS peer auth (superuser) | No |
-| App / `pipeline/` over TCP (`localhost:5432`) | Role `eesi` + password | Yes — set `EESI_DB_PASSWORD` in `.env` (default dev value: `eesi1234`) |
-
-If the app reports “password authentication failed for user eesi”, check that `.env` has the correct password and that your SSH tunnel is running (otherwise you may be hitting a different Postgres on your laptop).
-
-#### Shutting down the EC2 instance
-
-**Only when GEN approves** (stops GPU/DB host for everyone):
-
-```bash
-sudo shutdown -h now
-```
-
-Run **after** SSH login on the instance. Do not run from your local machine.
-
-#### Summary workflow
-
-**Local investigator / developer (most common):**
-
-```bash
-# Terminal 1 — tunnel (keep open; local machine only)
-ssh -L 5432:localhost:5432 <username>@<ec2-host> -N
-
-# Terminal 2 — app
-aws sso login --profile <aws-profile>
-export AWS_PROFILE=<aws-profile>
-cd /path/to/EESI
-source .venv/bin/activate
-cd app && npm run electron-dev
-```
-
-**On EC2 (scripts / DB only):**
-
-```bash
-ssh <username>@<ec2-host>
-cd /path/to/EESI   # clone repo on instance if needed
-source .venv/bin/activate
-python examples/query_example.py --image sample.jpg
-# DB: EESI_DB_HOST=localhost in .env — no tunnel
-```
-
-### 4.3 Clone and model weights
-
-Ensure these files exist under `models/`:
-
-- `object_detector_best.pt` — **required** for full-image path  
-- `weights-41.pt` — only if using Flora embeddings  
-- `geolora_checkpoints/epoch_*.pt` — only if using GeoLoRA embeddings  
-
-First run will also download Hugging Face / OpenCLIP base weights (~several GB).
-
-### 4.4 Python environment
+**Prerequisites:** Python 3.11+, Node.js 18+, SSH access to GEN EC2, AWS SSO configured.
 
 From the repository root:
 
 ```bash
+# 1. Python
 python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install --upgrade pip
+source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-### 4.5 Environment file
-
-```bash
+# 2. Environment file
 cp .env.example .env
-```
+# Defaults in .env.example work for GEN dev (DB user eesi, password eesi1234).
+# Update EESI_S3_BUCKET if your team uses a different bucket name.
 
-Edit `.env` with database credentials and optional overrides (see [Configuration](#9-configuration)).
-
-- **Local machine:** `EESI_DB_HOST=localhost` with the [SSH tunnel](#ssh-tunnel--local-machine--database-on-ec2) running.
-- **On EC2:** `EESI_DB_HOST=localhost` with no tunnel.
-
-### 4.6 AWS credentials
-
-GEN typically uses **AWS SSO**. Configure your CLI profile per internal documentation, then see [AWS SSO — S3 access](#aws-sso--s3-access-local-or-ec2).
-
-Default bucket: `eesi-students-368003222772` (override with `EESI_S3_BUCKET` in `.env`).
-
-### 4.7 Node dependencies (app)
-
-```bash
+# 3. Node (Electron app)
 cd app
 npm install
+cd ..
 ```
+
+Ensure `models/object_detector_best.pt` exists. First analysis will download additional model weights from Hugging Face (~several GB).
+
+### Local machine vs EC2
+
+**You run the app on your laptop.** That is the normal workflow for this repo.
+
+**EC2 hosts the database** (and was used to build the reference index). You do **not** run the Electron app on EC2. You only need EC2 access for:
+
+1. **SSH tunnel** — so your laptop can reach the database (see [Run the app](#run-the-app))
+2. **Optional admin** — e.g. `sudo -u postgres psql -d eesi` when SSH'd into EC2 for debugging
+
+| | Your laptop | EC2 |
+|---|-------------|-----|
+| Run Electron app | ✅ Yes | ❌ No |
+| SSH tunnel to DB | ✅ Required | ❌ Not needed |
+| AWS SSO for S3 | ✅ Required | Only if running scripts there |
+| `sudo -u postgres psql` | ❌ | ✅ Optional admin |
+
+Get `<username>`, `<ec2-host>`, and `<aws-profile>` from your GEN administrator.
 
 ---
 
-## 5. Running the investigator app
+## Run the app
 
-This is the primary way GEN investigators interact with EESI.
+Do this **every time** you want to use EESI.
 
-### Quick start (recommended)
+### Terminal 1 — SSH tunnel (keep open)
 
-From the repository root:
+Forwards your laptop’s port 5432 to PostgreSQL on EC2:
 
 ```bash
-# 1. Activate Python venv (same shell or ensure PYTHON_EXECUTABLE points to it)
+ssh -L 5432:localhost:5432 <username>@<ec2-host> -N
+```
+
+Background option: add `-f` after `ssh`.
+
+If port 5432 is busy on your Mac, use `-L 15432:localhost:5432` and set `EESI_DB_PORT=15432` in `.env`.
+
+### Terminal 2 — AWS + app
+
+```bash
+aws sso login --profile <aws-profile>
+export AWS_PROFILE=<aws-profile>
+
+cd /path/to/EESI
 source .venv/bin/activate
-
-# 2. Local machine only: SSH tunnel to EC2 DB (see §4.2)
-#    ssh -L 5432:localhost:5432 <username>@<ec2-host> -N
-# 3. aws sso login --profile <aws-profile> && export AWS_PROFILE=<aws-profile>
-# 4. Ensure .env exists at repo root
-
-# 5. Launch the app (you must already be in app/ — do not run "cd app" twice)
 cd app
 npm run electron-dev
 ```
 
-**Or** use the helper script:
+**Important:** Use the **Electron window** that opens — not the browser tab at localhost:5173.
 
-```bash
-./app/start-dev.sh
-```
+If you are already inside `app/`, run `npm run electron-dev` only (do not `cd app` again).
 
-What happens:
+### Checklist
 
-1. Electron main process is compiled to `app/dist/`
-2. Vite serves the React UI at **http://localhost:5173** (dev only)
-3. Electron window opens — **use the Electron window**, not the browser tab
-4. Upload an image → choose **Full Image** or **Crop + Label** → **Analyze Image**
+Before clicking **Analyze Image**, confirm:
 
-### Production-style run
+- [ ] Terminal 1: SSH tunnel is running
+- [ ] `aws sso login` succeeded (`export AWS_PROFILE=...`)
+- [ ] Python venv is activated
+- [ ] `.env` exists at repo root
 
-```bash
-cd app
-npm run build:electron
-npm run build:vite
-NODE_ENV=production npm run electron
-```
-
-Package installers: `npm run build` (uses `electron-builder`).
-
-### App usage modes
-
-| Mode | When to use |
-|------|-------------|
-| **Full Image** | Upload a full bathroom photo; YOLO finds objects automatically |
-| **Crop + Label** | Upload a pre-cropped object; select the object class (toilet, sink, etc.) |
-
-Results show geographic location text, similarity score, and reference thumbnails (loaded from S3). Use **Export Results** to save JSON locally.
-
-### Environment variables for the app
-
-| Variable | Purpose |
-|----------|---------|
-| `PYTHON_EXECUTABLE` | Path to Python with pipeline installed (default: `python3`) |
-| `EESI_ROOT` | Repository root (auto-detected from `app/dist/`) |
-| `VITE_DEV_SERVER_PORT` | Dev UI port (default `5173`) |
-| `VITE_DEV_SERVER_URL` | Full dev URL if port/host customized |
-
-All `EESI_*` database and S3 variables in `.env` are loaded by the Python subprocess.
-
-### Port 5173 already in use
-
-```bash
-# macOS / Linux
-lsof -ti :5173 | xargs kill -9
-
-# Or use another port:
-export VITE_DEV_SERVER_PORT=5174
-export VITE_DEV_SERVER_URL=http://localhost:5174
-cd app && npm run electron-dev
-```
+First query may take a few minutes while models load.
 
 ---
 
-## 6. Programmatic usage
+## Using the app
 
-Run from the repository root with `.env` configured and venv active.
+1. **Upload** an image (PNG, JPG, WEBP).
+2. Choose a mode:
+   - **Full Image** — auto-detects bathroom objects (YOLO).
+   - **Crop + Label** — you already cropped the object; pick the class (toilet, sink, etc.).
+3. Click **Analyze Image**.
+4. Select a detected object (full-image mode) to view **top matches** with location, similarity %, and reference thumbnails.
+5. **Export Results** saves JSON locally.
 
-### Path 1 — Full image
+**Tips:**
 
-```python
-from PIL import Image
-from pipeline.query import query_from_image
-
-image = Image.open("path/to/bathroom.jpg")
-results = query_from_image(image, k=5)
-
-# results: dict[label -> list of match dicts], or None if filtered out
-if results:
-    for label, matches in results.items():
-        print(label, matches[0]["country"], matches[0]["distance"])
-```
-
-### Path 2 — Pre-cropped object
-
-```python
-from PIL import Image
-from pipeline.query import query_from_crop
-
-crop = Image.open("path/to/toilet_crop.jpg")
-matches = query_from_crop(crop, label="toilet", k=5)
-
-for m in matches:
-    print(m["city"], m["country"], m["distance"], m["image_path"])
-```
-
-### CLI example
-
-```bash
-python examples/query_example.py --image path/to/bathroom.jpg
-python examples/query_example.py --crop path/to/sink.jpg --label sink -k 10
-```
-
-### Shared pipeline only (no database)
-
-```python
-from PIL import Image
-from pipeline.core import process_image, process_crop
-
-full = process_image(Image.open("bathroom.jpg"))   # list of dicts with crop + embedding
-crop = process_crop(Image.open("toilet.jpg"), "toilet")
-```
+- “No objects detected” → try **Crop + Label**, or use a clearer bathroom photo.
+- Match images require AWS SSO; re-run `aws sso login` if thumbnails fail to load.
+- DB errors → check SSH tunnel and `.env` password (`eesi1234` for dev).
 
 ---
 
-## 7. Database schema
+## Database schema
 
 Table: **`objects`**
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | serial | Primary key |
-| `label` | text | Object class (13 YOLO classes) |
-| `city`, `state`, `country`, `continent` | text | Geographic hierarchy |
-| `lat`, `long` | float | Coordinates |
-| `image_path` | text | `s3://bucket/objects/<listing_id>/<label>_<index>.jpg` |
-| `caption` | text | Optional caption (unused in current query path) |
-| `dino_embedding` | vector(768) | DINOv2 baseline |
-| `flora_embedding` | vector(512) | Flora LoRA (UIH-shared architecture) |
-| `base_clip_embedding` | vector(1024) | **Production query column** (DFN-CLIP visual) |
-| `geolora_embedding_e1` … `e4` | vector(512) | GeoLoRA training checkpoints |
-| `created_at` | timestamp | Insert time |
+| Column | Description |
+|--------|-------------|
+| `label` | Object class (13 YOLO classes) |
+| `city`, `state`, `country`, `continent` | Geographic metadata |
+| `lat`, `long` | Coordinates |
+| `image_path` | S3 URI for reference crop |
+| `base_clip_embedding` | **Production search column** (1024-d, cosine similarity) |
+| `flora_embedding`, `dino_embedding`, `geolora_embedding_e1`–`e4` | Alternate embedding columns |
 
-Similarity uses pgvector **cosine distance** (`<=>`). Queries filter by `label` so toilets are only compared to toilets.
+Queries filter by `label` and rank by pgvector cosine distance (`<=>`, lower = more similar).
 
----
+**Two ways to connect to Postgres:**
 
-## 8. Models
-
-| Model | Role | Weights / source |
-|-------|------|------------------|
-| **roomLuxuryAnnotater** | Bathroom CLIP filter | `strollingorange/roomLuxuryAnnotater` (Hugging Face) |
-| **YOLO26s (custom)** | 13-class object detection | `models/object_detector_best.pt` |
-| **DFN-CLIP ViT-H/14-378** | **Production embeddings** | `hf-hub:apple/DFN5B-CLIP-ViT-H-14-378` via `open_clip` |
-| **Flora** | 512-d LoRA on DFN-CLIP (UIH lineage) | `models/weights-41.pt` |
-| **GeoLoRA** | Geographic fine-tune (4 epochs) | `models/geolora_checkpoints/epoch_*.pt` |
-| **DINOv2-base** | 768-d baseline embedder | `facebook/dinov2-base` |
-
-**YOLO classes:** `toilet`, `sink`, `mirror`, `shower`, `showerhead`, `bathtub`, `floor`, `rug`, `brand`, `outlet`, `plant`, `bidet`, `window`.
-
-**Evaluation recommendation:** Use **base DFN-CLIP** for production (`EESI_EMBEDDING_COLUMN=base_clip_embedding`). It achieved the strongest geographic retrieval metrics in holdout evaluation (median closest match ~367 km at K=10). GeoLoRA showed promise but needs more training compute to match base CLIP.
-
-Switch embedding column (must match stored DB vectors):
-
-```bash
-# .env
-EESI_EMBEDDING_COLUMN=flora_embedding
-```
-
-Then use `generate_flora_embedding` in `core.py` instead of `generate_base_clip_embedding` if re-indexing or experimenting locally.
+| Method | Password? |
+|--------|-----------|
+| App / pipeline via tunnel (`localhost:5432`, user `eesi`) | Yes — `EESI_DB_PASSWORD` in `.env` |
+| `sudo -u postgres psql -d eesi` on EC2 | No (admin only) |
 
 ---
 
-## 9. Configuration
+## Models
 
-Copy `.env.example` → `.env` at the **repository root**.
+| Model | Purpose | Location |
+|-------|---------|----------|
+| **YOLO26s (custom)** | Detect 13 bathroom object classes | `models/object_detector_best.pt` |
+| **DFN-CLIP ViT-H/14-378** | Production embeddings (default) | Downloaded via `open_clip` on first run |
+| **roomLuxuryAnnotater** | Bathroom scene filter | Hugging Face |
+| **Flora / GeoLoRA / DINOv2** | Alternate embedders (optional) | `models/weights-41.pt`, `geolora_checkpoints/` |
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `EESI_DB_HOST` | `localhost` | PostgreSQL host |
-| `EESI_DB_PORT` | `5432` | PostgreSQL port |
-| `EESI_DB_NAME` | `eesi` | Database name |
-| `EESI_DB_USER` | `eesi` | Database user |
-| `EESI_DB_PASSWORD` | `eesi1234` | Password for role `eesi` (TCP); not used for `sudo -u postgres psql` |
-| `EESI_S3_BUCKET` | `eesi-students-368003222772` | Reference image bucket |
-| `EESI_EMBEDDING_COLUMN` | `base_clip_embedding` | pgvector column for search |
-| `PYTHON_EXECUTABLE` | `python3` | Python for Electron subprocess |
-| `EESI_ROOT` | auto | Repo root override |
-| `VITE_DEV_SERVER_PORT` | `5173` | Vite dev port |
-| `VITE_DEV_SERVER_URL` | `http://localhost:5173` | URL Electron loads in dev |
+**YOLO classes:** bathtub, bidet, brand, floor, mirror, outlet, plant, rug, shower, showerhead, sink, toilet, window.
 
-| `AWS_PROFILE` | — | Your SSO profile name (export in shell before running the app) |
-
-Standard AWS variables (`AWS_ACCESS_KEY_ID`, etc.) apply if not using SSO profiles.
-
-
-## 11. Troubleshooting
-
-| Symptom | Likely cause | Fix |
-|---------|----------------|-----|
-| `Electron bridge unavailable` | Opened Vite URL in browser | Use the **Electron** window (`npm run electron-dev`) |
-| `Python script failed` / import errors | Wrong Python or missing deps | Set `PYTHON_EXECUTABLE` to venv python; `pip install -r requirements.txt` |
-| DB connection refused | No SSH tunnel (local) or wrong `.env` | Start tunnel: `ssh -L 5432:localhost:5432 <username>@<ec2-host> -N`; see [§4.2](#42-local-development-machine-vs-ec2-instance) |
-| S3 / `image_retrieval_error` in matches | SSO session expired | Re-run `aws sso login --profile <aws-profile>` and verify with `aws s3 ls` |
-| `cd: no such file or directory: app` | Already inside `app/` | Run `npm run electron-dev` only (no extra `cd app`) |
-| `No objects detected` | Non-bathroom or low-confidence YOLO | Try **Crop + Label** mode |
-| Slow first query | Model download / GPU init | Expected; subsequent queries faster |
-| pgvector dimension error | Wrong `EESI_EMBEDDING_COLUMN` | Must match column used when indexing |
-| Port 5173 in use | Another Vite process | Kill process or change `VITE_DEV_SERVER_PORT` |
-
-For app-specific details, see [`app/README.md`](app/README.md) and [`app/QUICKSTART.md`](app/QUICKSTART.md).
+Production queries use **`base_clip_embedding`** (`EESI_EMBEDDING_COLUMN` in `.env`).
 
 ---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `password authentication failed for user "eesi"` | Set `EESI_DB_PASSWORD=eesi1234` in `.env`; ensure SSH tunnel is running |
+| `connection refused` on port 5432 | Start SSH tunnel (Terminal 1) |
+| Match images missing / S3 errors | `aws sso login --profile <aws-profile>` and `export AWS_PROFILE=...` |
+| `Electron bridge unavailable` | Use the Electron window, not the browser |
+| `cd: no such file or directory: app` | Already in `app/` — run `npm run electron-dev` only |
+| Port 5173 in use | `lsof -ti :5173 \| xargs kill -9` |
+| Slow first run | Normal — models downloading/loading |
+
+### `.env` reference
+
+| Variable | Default |
+|----------|---------|
+| `EESI_DB_HOST` | `localhost` (with tunnel) |
+| `EESI_DB_PORT` | `5432` |
+| `EESI_DB_NAME` / `EESI_DB_USER` | `eesi` |
+| `EESI_DB_PASSWORD` | `eesi1234` |
+| `EESI_S3_BUCKET` | set in `.env.example` |
+| `EESI_EMBEDDING_COLUMN` | `base_clip_embedding` |
+
+---
+
+Developed by Cal Poly Data Science in partnership with GEN.
