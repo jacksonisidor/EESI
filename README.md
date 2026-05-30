@@ -150,7 +150,7 @@ Obtain your **AWS SSO start URL**, **CLI profile name**, and **EC2 connection de
 
 #### SSH into the EC2 instance
 
-**ONLY IF RUNNING CODE ON EC2** -- the app does not require this.
+*ONLY IF RUNNING CODE ON EC2* -- the app does not require this.
 
 ```bash
 ssh <username>@<ec2-host>
