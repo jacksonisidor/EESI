@@ -2,7 +2,7 @@
 
 EESI helps investigators compare visually distinctive bathroom fixtures against a large, geotagged reference index. Investigators run the **desktop app on their local machine**. The app detects objects, generates embeddings locally, and queries a remote reference database for similar objects with geographic metadata.
 
-**Privacy:** Evidence images stay on the investigator device. Only embeddings are sent to the database for similarity search. Match thumbnails are reference photos fetched from S3.
+**Privacy:** Evidence images stay on the investigator device. Only embeddings are sent to the database for similarity search. Matched images are reference photos fetched from S3.
 
 **Reference scale:** 273,000+ cropped objects across 236+ countries (PostgreSQL + pgvector on GEN EC2, images on S3).
 
@@ -26,7 +26,7 @@ EESI helps investigators compare visually distinctive bathroom fixtures against 
 
 EESI builds on GEN’s **Uniform Intelligence Hub (UIH)** (school-uniform logo matching). It extends that idea to **everyday bathroom objects** — toilets, sinks, outlets, shower enclosures, etc. — indexed from publicly available geotagged photos.
 
-Investigators upload a bathroom image or a pre-cropped object. The system returns visually similar reference objects with city, country, coordinates, and similarity scores to help narrow geographic hypotheses.
+Investigators upload a bathroom image or a pre-cropped object. The system returns visually similar reference objects with city, country, coordinates, and similarity scores to help narrow down possible locations.
 
 ---
 
