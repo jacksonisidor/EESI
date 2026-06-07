@@ -207,4 +207,3 @@ def generate_dino_embedding(image: Image.Image) -> np.ndarray:
     # embedding = outputs.last_hidden_state.mean(dim=1) ?? maybe better
     # shape -> (768,) required for our DB
     return outputs.last_hidden_state[:, 0].squeeze().cpu().numpy()
-

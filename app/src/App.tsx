@@ -49,8 +49,7 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
-
-
+  const [kValue, setKValue] = useState<number>(5);
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,6 +83,7 @@ function App() {
             ? bathroomFeature
             : 'other'
           : undefined,
+        k: kValue,
     });
 
     if (result.success) {
@@ -356,6 +356,18 @@ function App() {
                       </div>
 
                   <div className="flex gap-2 flex-col">
+                  <label className="block text-sm text-slate-400">
+                      Matches (k)
+                      <input
+                        type="number"
+                        min={1}
+                        value={kValue}
+                        onChange={(e) =>
+                          setKValue(Math.max(1, Number(e.target.value) || 1))
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                      />
+                    </label>
                     <button
                       onClick={analyzeImage}
                       disabled={isAnalyzing || !hasElectronBridge}

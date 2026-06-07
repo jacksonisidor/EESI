@@ -69,7 +69,7 @@ app.on('activate', () => {
 });
 
 // Function to call the Python GEN pipeline query function
-async function callPythonQuery(imagePath: string, mode: 'image' | 'crop', label?: string): Promise<any> {
+async function callPythonQuery(imagePath: string, mode: 'image' | 'crop', label: string | undefined, k: number): Promise<any> {
   return new Promise((resolve, reject) => {
     // Create a temporary Python script to call the pipeline
     const tempScript = `
@@ -102,13 +102,14 @@ try:
 
     mode = ${JSON.stringify(mode)}
     label = ${label ? JSON.stringify(label) : 'None'}
+    k = ${k}
 
     if mode == 'crop':
         if not label:
             raise ValueError('Crop mode requires a label')
-        results = query_from_crop(image, label, k=5)
+        results = query_from_crop(image, label, k=k)
     else:
-        results = query_from_image(image, k=5)
+        results = query_from_image(image, k=k)
 
     print("Function called", mode, file=sys.stderr)
 
@@ -229,8 +230,9 @@ except Exception as e:
 }
 
 // IPC handlers for image analysis
-ipcMain.handle('analyze-image', async (event, payload: { imageData: string; mode: 'image' | 'crop'; label?: string }) => {
+ipcMain.handle('analyze-image', async (event, payload: { imageData: string; mode: 'image' | 'crop'; label?: string; k?: number }) => {
   console.log('IPC handler called with mode:', payload.mode);
+  console.log('IPC handler called with k:', payload.k);
   console.log('IPC handler called with image data length:', payload.imageData.length);
 
   try {
@@ -246,7 +248,7 @@ ipcMain.handle('analyze-image', async (event, payload: { imageData: string; mode
 
     // Call Python function
     console.log('Calling Python function...');
-    const result = await callPythonQuery(tempImagePath, payload.mode, payload.label);
+    const result = await callPythonQuery(tempImagePath, payload.mode, payload.label, payload.k ?? 5);
     console.log('Python result:', result);
 
     return result;

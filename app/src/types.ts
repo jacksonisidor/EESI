@@ -24,6 +24,7 @@ export interface AnalysisRequest {
   imageData: string;
   mode: 'image' | 'crop';
   label?: string;
+  k: number;
 }
 
 export interface AnalysisResult {
