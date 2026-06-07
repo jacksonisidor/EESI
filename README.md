@@ -2,7 +2,7 @@
 
 EESI helps investigators compare visually distinctive bathroom fixtures against a large, geotagged reference index. Investigators run the **desktop app on their local machine**. The app detects objects, generates embeddings locally, and queries a remote reference database for similar objects with geographic metadata.
 
-**Privacy:** Evidence images stay on the investigator device. Only embeddings are sent to the database for similarity search. Match thumbnails are reference photos fetched from S3.
+**Privacy:** Evidence images stay on the investigator device. Only embeddings are sent to the database for similarity search. Matched images are reference photos fetched from S3.
 
 **Reference scale:** 273,000+ cropped objects across 236+ countries (PostgreSQL + pgvector on GEN EC2, images on S3).
 
