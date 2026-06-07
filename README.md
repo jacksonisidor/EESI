@@ -78,7 +78,11 @@ Key `pipeline/` modules: `core.py` (orchestration), `query.py` (search), `db.py`
 
 **Prerequisites:** Python 3.11+, Node.js 18+, SSH access to GEN EC2, AWS SSO configured.
 
-From the repository root:
+First, clone the repository (assuming git is installed): 
+         - `git clone https://github.com/jacksonisidor/EESI.git`
+         -  `cd EESI`
+         
+The, from the repository root:
 
 ```bash
 # 1. Python
