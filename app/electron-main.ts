@@ -195,7 +195,7 @@ except Exception as e:
       errorOutput += data.toString();
     });
 
-    python.on('close', (code) => {
+python.on('close', (code) => {
       // Clean up temp file
       try {
         fs.unlinkSync(tempScriptPath);
@@ -207,6 +207,27 @@ except Exception as e:
       if (code === 0) {
         try {
           const result = JSON.parse(output.trim());
+
+          // --- ADDED FIX: Convert image paths to Base64 before sending to React ---
+          if (result.success && result.objects) {
+            for (const obj of result.objects) {
+              for (const match of obj.matches) {
+                // If Python didn't provide imageData, read it locally
+                if (!match.imageData && match.imagePath) {
+                  try {
+                    // Node.js fs bypasses all browser security
+                    const fileBuffer = fs.readFileSync(match.imagePath);
+                    match.imageData = fileBuffer.toString('base64');
+                  } catch (imgErr) {
+                    console.error("Failed to read match image:", match.imagePath, imgErr);
+                    match.imageRetrievalError = "Image file not found on disk.";
+                  }
+                }
+              }
+            }
+          }
+          // -----------------------------------------------------------------------
+
           resolve(result);
         } catch (e) {
           reject(new Error(`Failed to parse Python output: ${output}`));

@@ -127,21 +127,29 @@ function App() {
   };
 
   const buildMatchImageSrc = (match: Match) => {
-    if (match.imageData) {
-      return match.imageData.startsWith('data:image/')
-        ? match.imageData
-        : `data:image/jpeg;base64,${match.imageData}`;
-    }
+      if (match.imageData) {
+        return match.imageData.startsWith('data:image/')
+          ? match.imageData
+          : `data:image/jpeg;base64,${match.imageData}`;
+      }
 
-    if (match.imagePath) {
-      const pathValue = match.imagePath.startsWith('file:')
-        ? match.imagePath
-        : `file://${encodeURI(match.imagePath)}`;
-      return pathValue;
-    }
+      if (match.imagePath) {
+        // If it already has the protocol, return it
+        if (match.imagePath.startsWith('file://')) {
+          return match.imagePath;
+        }
+        
+        // Standardize slashes for Windows compatibility
+        const normalizedPath = match.imagePath.replace(/\\/g, '/');
+        
+        // Ensure we have three slashes for absolute paths
+        const prefix = normalizedPath.startsWith('/') ? 'file://' : 'file:///';
+        
+        return `${prefix}${encodeURI(normalizedPath)}`;
+      }
 
-    return null;
-  };
+      return null;
+    };
 
   const renderStarRating = (similarity: number) => {
     const rating = Math.max(0, Math.min(5, similarity * 5));
