@@ -50,7 +50,7 @@ function App() {
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
   const [kValue, setKValue] = useState<number>(5);
-  
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -83,7 +83,7 @@ function App() {
             ? bathroomFeature
             : 'other'
           : undefined,
-        k: kValue,
+      k: kValue,
     });
 
     if (result.success) {
@@ -356,7 +356,7 @@ function App() {
                       </div>
 
                   <div className="flex gap-2 flex-col">
-                  <label className="block text-sm text-slate-400">
+                    <label className="block text-sm text-slate-400">
                       Matches (k)
                       <input
                         type="number"
@@ -435,11 +435,8 @@ function App() {
                           : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div>
                         <h3 className="font-semibold text-slate-100">{obj.label}</h3>
-                        <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
-                          {(obj.confidence * 100).toFixed(0)}%
-                        </span>
                       </div>
                       <p className="text-sm text-slate-400 mt-2">
                         {obj.matches.length} match{obj.matches.length !== 1 ? 'es' : ''} found
