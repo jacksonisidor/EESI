@@ -94,7 +94,7 @@ pip install -r requirements.txt
 
 # 2. Environment file
 cp .env.example .env
-# Defaults in .env.example work for GEN dev (DB user eesi, password eesi1234).
+# Defaults in .env.example work for GEN dev
 # Update EESI_S3_BUCKET if your team uses a different bucket name.
 
 # 3. Node (Electron app)
